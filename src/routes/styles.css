@@ -11,6 +11,7 @@
 	--color-theme-2: #4075a6;
 	--color-text: rgba(0, 0, 0, 0.7);
 	--column-width: 42rem;
+	--teste-a: #ffffff;
 	--column-margin-top: 4rem;
 	font-family: var(--font-body);
 	color: var(--color-text);
