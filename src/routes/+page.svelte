@@ -1,13 +1,16 @@
 <script lang="ts">
-	type CellVariant = 'mine' | number;
-	type aa = 'flag' | 'closed' | 'open';
+	type CellOpenVariant = 'mine' | number;
+
+	type Cell = { open: boolean; flag: boolean; value: CellOpenVariant };
 
 	let columns = 8;
 	let rows = 8;
 	let gameOver = false;
 	let won = false;
 	let mines = 10;
-	let board: CellVariant[][] = Array(rows).map(() => Array(columns).fill(0));
+	let board: Cell[][] = new Array(rows)
+		.fill(0)
+		.map(() => new Array(columns).map(() => ({ open: false, flag: false, value: 0 })));
 	const deltas = [
 		[0, 1],
 		[1, 0],
@@ -19,7 +22,7 @@
 
 		[1, -1],
 		[-1, 1]
-	];
+	] as const;
 
 	function randomInt(max: number) {
 		return Math.round(Math.random() * max);
@@ -27,30 +30,36 @@
 
 	function handleCellPress(i: number, j: number) {
 		const cell = board[i][j];
-		if (cell === 'mine') {
+
+		if (cell.open || cell.flag) {
+			return;
+		}
+
+		if (cell.value === 'mine') {
 			gameOver = true;
 			won = false;
+		} else {
+			board[i][j].open = true;
 		}
 	}
 
 	while (mines !== 0) {
-		board[randomInt(rows - 1)][randomInt(columns - 1)] = 'mine';
+		board[randomInt(rows - 1)][randomInt(columns - 1)].value = 'mine';
 		mines -= 1;
 		// 💣
 	}
 
 	for (let i = 0; i < rows; i++) {
 		for (let j = 0; j < columns; j++) {
-			if (board[i][j] !== 'mine') {
+			if (board[i][j].value !== 'mine') {
 				continue;
 			}
-			for (let [x, y] of deltas) {
+			for (const [x, y] of deltas) {
 				const cell = board[i + x]?.[j + y];
-				if (!cell || cell === 'mine') {
+				if (!cell || cell.value === 'mine') {
 					continue;
 				}
-				let x = cell;
-				board[i + x][j + y] += 1;
+				cell.value += 1;
 			}
 		}
 	}
