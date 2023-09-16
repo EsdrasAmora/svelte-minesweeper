@@ -1,16 +1,12 @@
 <script lang="ts">
-	// the advantage of using a component (inline svg) is that you can custumize it with css but it will not be cached by the browser which is not exactly a problem usually, maybe only if you had A LOT of them
-	// import Batata from '$lib/images/svelte-logo.svg?component';
-	import MineIcon from '$lib/images/bomb.svg?component';
-	import FlagIcon from '$lib/images/flag.svg?component';
+	import MineIcon from '$lib/images/bomb.svg?url';
+	import FlagIcon from '$lib/images/flag.svg?url';
 	type CellOpenVariant = 'mine' | number;
 	type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
 
 	let columns = 8;
 	let rows = 8;
-
-	// not sure if computed state causes re-render, maybe i need to put a $ here
-	let totalNumberOfCells = rows * columns;
+	$: totalNumberOfCells = rows * columns;
 
 	let openCells = 0;
 	let gameOver = false;
@@ -41,8 +37,9 @@
 	function revealAllMines() {
 		for (let i = 0; i < rows; i++) {
 			for (let j = 0; j < columns; j++) {
-				if (board[i][j].value === 'mine') {
-					board[i][j].open = true;
+				const cell = board[i][j];
+				if (cell.value === 'mine' && !cell.flag) {
+					cell.open = true;
 				}
 			}
 		}
@@ -65,10 +62,6 @@
 	}
 
 	function revealNeighborsIfFlagged(cell: Cell) {
-		if (!cell.open) {
-			return;
-		}
-
 		if (cell.value === 'mine') {
 			throw new Error('unreachable');
 		}
@@ -77,7 +70,7 @@
 		const { i, j } = cell;
 
 		for (const [x, y] of deltas) {
-			if (board[i + x]?.[j + y].flag) {
+			if (board[i + x]?.[j + y]?.flag) {
 				flaggedNeighbors += 1;
 			}
 		}
@@ -109,6 +102,13 @@
 		return true;
 	}
 
+	function checkGameOver() {
+		if (flags + openCells === totalNumberOfCells) {
+			gameOver = true;
+			won = true;
+		}
+	}
+
 	function handleCellPress(i: number, j: number) {
 		const cell = board[i][j];
 
@@ -127,12 +127,9 @@
 			return;
 		}
 
-		if (flags + openCells === totalNumberOfCells) {
-			gameOver = true;
-			won = true;
-		}
-
 		board = board;
+
+		checkGameOver();
 	}
 
 	function handleRightClick(i: number, j: number) {
@@ -152,9 +149,13 @@
 		board = board;
 	}
 
-	while (mines !== 0) {
-		board[randomInt(rows - 1)][randomInt(columns - 1)].value = 'mine';
-		mines -= 1;
+	let placedMines = 0;
+	while (placedMines < mines) {
+		const cell = board[randomInt(rows - 1)][randomInt(columns - 1)];
+		if (cell.value !== 'mine') {
+			cell.value = 'mine';
+			placedMines += 1;
+		}
 	}
 
 	for (let i = 0; i < rows; i++) {
@@ -169,9 +170,6 @@
 			}
 		}
 	}
-	mines = 10;
-
-	$: console.log('hello');
 </script>
 
 <svelte:head>
@@ -182,34 +180,53 @@
 <section>
 	<h1>Minesweeper</h1>
 	<!-- {@debug board} -->
-	<div class="board" style="--board-columns: {columns}">
+	<div class="board" style="--board-columns: {columns}" class:game-over={gameOver}>
 		{#each board as row, i}
 			{#each row as cell, j}
+				{@const { open, flag, value } = cell}
+				{@const mine = value === 'mine'}
 				<div
-					class="cell"
-					class:open={cell.open}
-					on:click={() => handleCellPress(i, j)}
-					on:keydown={(e) => {
-						if (e.key === 'Enter') {
-							handleCellPress(i, j);
-						}
-					}}
-					class:mine={cell.open && cell.value === 'mine'}
+					tabindex={1}
 					role="cell"
-					tabindex={i + 1}
+					class="cell"
+					class:open
+					class:flag
+					class:mine
+					data-row={i}
+					data-column={j}
+					on:click={() => handleCellPress(i, j)}
 					on:contextmenu|preventDefault={() => handleRightClick(i, j)}
+					on:keydown={(e) => {
+						//@ts-ignore
+						// console.dir(e.target.children[0]);
+						switch (e.code) {
+							case 'ArrowUp' | 'KeyK':
+								return;
+							case 'ArrowDown' | 'KeyJ':
+								return;
+							case 'ArrowLeft' | 'KeyH':
+								return;
+							case 'ArrowRight' | 'KeyL':
+								return;
+						}
+						// if (e.code === 'Enter') {
+						// 	handleCellPress(i, j);
+						// } else if (e.code === 'Space') {
+						// 	handleRightClick(i, j);
+						// }
+					}}
 				>
 					<div class="cell-internal">
-						{#if cell.open}
-							{#if cell.value === 'mine'}
-								<MineIcon />
-							{:else if cell.value > 0}
-								{cell.value}
+						{#if open}
+							{#if mine}
+								<img src={MineIcon} alt="A mine" />
+							{:else if value > 0}
+								{value}
 							{/if}
-						{:else if cell.flag}
-							<FlagIcon />
-							<!-- {:else} -->
-							<!-- 	{cell.value} -->
+						{:else if flag}
+							<img src={FlagIcon} alt="A flag" />
+						{:else}
+							{value}
 						{/if}
 					</div>
 				</div>
@@ -230,7 +247,6 @@
 		display: grid;
 		grid-template-columns: repeat(var(--board-columns), 1fr);
 		background-color: #2196f3;
-		/* width: 100%; */
 	}
 
 	.cell {
@@ -238,10 +254,19 @@
 		border: 1px solid rgba(0, 0, 0, 0.8);
 		font-size: 30px;
 		text-align: center;
-		/* padding: 20px; */
-		/* display: flex; */
-		/* align-content: center; */
-		/* flex-wrap: wrap; */
+	}
+
+	.board.game-over {
+		box-shadow: 2px 2px 20px 2px rgba(0, 0, 0, 0.5);
+		/* border: 2px solid antiquewhite; */
+	}
+
+	.board.game-over > .cell.flag {
+		background-color: darkred;
+	}
+
+	.board.game-over > .cell.flag.mine {
+		background-color: greenyellow;
 	}
 
 	.cell.open {
@@ -255,6 +280,10 @@
 	.cell:hover {
 		background-color: red;
 	}
+
+	/* .cell:not(.open):hover { */
+	/* 	background-color: red; */
+	/* } */
 
 	.cell:active {
 		background: green;
