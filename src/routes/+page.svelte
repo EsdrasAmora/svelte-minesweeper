@@ -1,8 +1,12 @@
+<script context="module" lang="ts">
+	export type CellOpenVariant = 'mine' | number;
+	export type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
+</script>
+
 <script lang="ts">
 	import MineIcon from '$lib/images/bomb.svg?url';
 	import FlagIcon from '$lib/images/flag.svg?url';
-	type CellOpenVariant = 'mine' | number;
-	type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
+	import Timer from './Timer.svelte';
 
 	let columns = 4;
 	let rows = 4;
@@ -216,6 +220,10 @@
 			<li><strong>Remaining Flags</strong> {mines - flags}</li>
 			<li>{mines - flags}</li>
 			<li><strong>Won</strong> {won} {gameOver}</li>
+			<li>
+				<strong>Time:</strong>
+				<Timer />
+			</li>
 		</ul>
 	</section>
 
