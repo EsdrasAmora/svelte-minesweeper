@@ -1,26 +1,6 @@
 <script context="module" lang="ts">
-	export type CellOpenVariant = 'mine' | number;
-	export type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
-</script>
-
-<script lang="ts">
-	import MineIcon from '$lib/images/bomb.svg?url';
-	import FlagIcon from '$lib/images/flag.svg?url';
-	import Timer from './Timer.svelte';
-
-	let columns = 4;
-	let rows = 4;
-	$: totalNumberOfCells = rows * columns;
-
-	let openCells = 0;
-	let gameOver = false;
-	let won = false;
-	let mines = 4;
-	let flags = 0;
-	let board: Cell[][] = Array.from({ length: columns }).map((_, i) =>
-		Array.from({ length: columns }).map((_, j) => ({ open: false, flag: false, value: 0, i, j }))
-	);
-
+	type CellOpenVariant = 'mine' | number;
+	type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
 	const deltas = [
 		[0, 1],
 		[1, 0],
@@ -33,6 +13,27 @@
 		[1, -1],
 		[-1, 1]
 	] as const;
+</script>
+
+<script lang="ts">
+	import MineIcon from '$lib/images/bomb.svg?url';
+	import FlagIcon from '$lib/images/flag.svg?url';
+	import Timer from './Timer.svelte';
+
+	let columns = 4;
+	let rows = 4;
+	let openCells = 0;
+	let gameOver = false;
+	let won = false;
+	let mines = 4;
+	let flags = 0;
+	let timer: Timer;
+	let board: Cell[][] = Array.from({ length: columns }).map((_, i) =>
+		Array.from({ length: columns }).map((_, j) => ({ open: false, flag: false, value: 0, i, j }))
+	);
+
+	$: totalNumberOfCells = rows * columns;
+	$: started = timer && !!timer.timer;
 
 	function randomInt(max: number) {
 		return Math.round(Math.random() * max);
@@ -99,6 +100,7 @@
 		if (cell.value === 'mine') {
 			gameOver = true;
 			won = false;
+			timer.stop();
 			revealAllMines();
 			return false;
 		}
@@ -110,14 +112,13 @@
 		if (flags + openCells === totalNumberOfCells) {
 			gameOver = true;
 			won = true;
+			timer.stop();
 		}
 	}
 
 	function handleCellPress(i: number, j: number) {
-		console.log(gameOver, won, flags, openCells, totalNumberOfCells);
-		if (flags + openCells === totalNumberOfCells) {
-			gameOver = true;
-			won = true;
+		if (!started) {
+			timer.start();
 		}
 		const cell = board[i][j];
 
@@ -141,7 +142,7 @@
 		checkGameOver();
 	}
 
-	function handleRightClick(i: number, j: number) {
+	function handlePlaceFlag(i: number, j: number) {
 		const cell = board[i][j];
 		if (gameOver || cell.open) {
 			return;
@@ -180,7 +181,7 @@
 			case 'Enter':
 				return handleCellPress(i, j);
 			case 'Space':
-				return handleRightClick(i, j);
+				return handlePlaceFlag(i, j);
 		}
 	}
 
@@ -205,6 +206,14 @@
 			}
 		}
 	}
+	/**
+	 * TODO:
+	 * SELECT board size and mine count
+	 * SELECT difficulty (tab)
+	 * START/RESTART game
+	 * Register click history
+	 *
+	 * */
 </script>
 
 <svelte:head>
@@ -222,12 +231,11 @@
 			<li><strong>Won</strong> {won} {gameOver}</li>
 			<li>
 				<strong>Time:</strong>
-				<Timer />
+				<Timer bind:this={timer} />
 			</li>
 		</ul>
 	</section>
 
-	<!-- {@debug board} -->
 	<div class="board" style="--board-columns: {columns}" class:game-over={gameOver}>
 		{#each board as row, i}
 			{#each row as cell, j}
@@ -242,7 +250,7 @@
 					class:flag
 					class:mine
 					on:click={() => handleCellPress(i, j)}
-					on:contextmenu|preventDefault={() => handleRightClick(i, j)}
+					on:contextmenu|preventDefault={() => handlePlaceFlag(i, j)}
 					on:keydown={(e) => handleCellKeydown(e, i, j)}
 				>
 					<div class="cell-internal">
