@@ -4,14 +4,14 @@
 	type CellOpenVariant = 'mine' | number;
 	type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
 
-	let columns = 8;
-	let rows = 8;
+	let columns = 4;
+	let rows = 4;
 	$: totalNumberOfCells = rows * columns;
 
 	let openCells = 0;
 	let gameOver = false;
 	let won = false;
-	let mines = 10;
+	let mines = 4;
 	let flags = 0;
 	let board: Cell[][] = Array.from({ length: columns }).map((_, i) =>
 		Array.from({ length: columns }).map((_, j) => ({ open: false, flag: false, value: 0, i, j }))
@@ -63,7 +63,7 @@
 
 	function revealNeighborsIfFlagged(cell: Cell) {
 		if (cell.value === 'mine') {
-			throw new Error('unreachable');
+			throw new Error('Unreachable');
 		}
 
 		let flaggedNeighbors = 0;
@@ -110,6 +110,11 @@
 	}
 
 	function handleCellPress(i: number, j: number) {
+		console.log(gameOver, won, flags, openCells, totalNumberOfCells);
+		if (flags + openCells === totalNumberOfCells) {
+			gameOver = true;
+			won = true;
+		}
 		const cell = board[i][j];
 
 		if (gameOver || cell.flag) {
@@ -149,6 +154,32 @@
 		board = board;
 	}
 
+	function focusCell(i: number, j: number) {
+		document.getElementById(`cell-${i}-${j}`)?.focus();
+	}
+
+	function handleCellKeydown(e: KeyboardEvent, i: number, j: number) {
+		//Wrapping around could be configurable
+		switch (e.code) {
+			case 'ArrowUp':
+			case 'KeyK':
+				return focusCell(i - 1, j);
+			case 'ArrowDown':
+			case 'KeyJ':
+				return focusCell(i + 1, j);
+			case 'ArrowLeft':
+			case 'KeyH':
+				return focusCell(i, j - 1);
+			case 'ArrowRight':
+			case 'KeyL':
+				return focusCell(i, j + 1);
+			case 'Enter':
+				return handleCellPress(i, j);
+			case 'Space':
+				return handleRightClick(i, j);
+		}
+	}
+
 	let placedMines = 0;
 	while (placedMines < mines) {
 		const cell = board[randomInt(rows - 1)][randomInt(columns - 1)];
@@ -179,6 +210,15 @@
 
 <section>
 	<h1>Minesweeper</h1>
+
+	<section>
+		<ul>
+			<li><strong>Remaining Flags</strong> {mines - flags}</li>
+			<li>{mines - flags}</li>
+			<li><strong>Won</strong> {won} {gameOver}</li>
+		</ul>
+	</section>
+
 	<!-- {@debug board} -->
 	<div class="board" style="--board-columns: {columns}" class:game-over={gameOver}>
 		{#each board as row, i}
@@ -186,35 +226,16 @@
 				{@const { open, flag, value } = cell}
 				{@const mine = value === 'mine'}
 				<div
-					tabindex={1}
+					tabindex={0}
+					id="cell-{i}-{j}"
 					role="cell"
 					class="cell"
 					class:open
 					class:flag
 					class:mine
-					data-row={i}
-					data-column={j}
 					on:click={() => handleCellPress(i, j)}
 					on:contextmenu|preventDefault={() => handleRightClick(i, j)}
-					on:keydown={(e) => {
-						//@ts-ignore
-						// console.dir(e.target.children[0]);
-						switch (e.code) {
-							case 'ArrowUp' | 'KeyK':
-								return;
-							case 'ArrowDown' | 'KeyJ':
-								return;
-							case 'ArrowLeft' | 'KeyH':
-								return;
-							case 'ArrowRight' | 'KeyL':
-								return;
-						}
-						// if (e.code === 'Enter') {
-						// 	handleCellPress(i, j);
-						// } else if (e.code === 'Space') {
-						// 	handleRightClick(i, j);
-						// }
-					}}
+					on:keydown={(e) => handleCellKeydown(e, i, j)}
 				>
 					<div class="cell-internal">
 						{#if open}
@@ -225,21 +246,15 @@
 							{/if}
 						{:else if flag}
 							<img src={FlagIcon} alt="A flag" />
-						{:else}
-							{value}
+							<!--- remove this if not in debug, could use an env --->
+							<!-- {:else} -->
+							<!-- 	{value} -->
 						{/if}
 					</div>
 				</div>
 			{/each}
 		{/each}
 	</div>
-	<section>
-		<ul>
-			<li><strong>Remaining Flags</strong> {mines - flags}</li>
-			<li><strong>Won</strong> {won}</li>
-			<li><strong>Game Over </strong> {gameOver}</li>
-		</ul>
-	</section>
 </section>
 
 <style>
