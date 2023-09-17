@@ -1,6 +1,8 @@
 <script context="module" lang="ts">
 	type CellOpenVariant = 'mine' | number;
+	type GameState = 'playing' | 'won' | 'lost' | 'idle';
 	type Cell = { open: boolean; flag: boolean; value: CellOpenVariant; i: number; j: number };
+	type Click = { row: number; column: number; time: number };
 	const deltas = [
 		[0, 1],
 		[1, 0],
@@ -13,6 +15,15 @@
 		[1, -1],
 		[-1, 1]
 	] as const;
+	//TODO: add difficult selector
+	const difficult = {
+		easy: { rows: 8, columns: 8, mines: 10 },
+		medium: { rows: 15, columns: 8, mines: 10 },
+		hard: { rows: 15, columns: 15, mines: 10 }
+	};
+	function randomInt(max: number) {
+		return Math.round(Math.random() * max);
+	}
 </script>
 
 <script lang="ts">
@@ -20,23 +31,55 @@
 	import FlagIcon from '$lib/images/flag.svg?url';
 	import Timer from './Timer.svelte';
 
-	let columns = 4;
-	let rows = 4;
+	let columns = 8;
+	let rows = 8;
 	let openCells = 0;
-	let gameOver = false;
-	let won = false;
-	let mines = 4;
+	let gameState: GameState = 'idle';
+	let mines = 10;
 	let flags = 0;
 	let timer: Timer;
-	let board: Cell[][] = Array.from({ length: columns }).map((_, i) =>
-		Array.from({ length: columns }).map((_, j) => ({ open: false, flag: false, value: 0, i, j }))
-	);
+	//TODO:  Generate clip from click history
+	let clicks: Click[] = [];
+	let board: Cell[][] = [];
 
+	resetGame();
 	$: totalNumberOfCells = rows * columns;
-	$: started = timer && !!timer.timer;
+	// $: console.log({ flags, openCells, totalNumberOfCells });
 
-	function randomInt(max: number) {
-		return Math.round(Math.random() * max);
+	function resetGame() {
+		columns = 8;
+		rows = 8;
+		openCells = 0;
+		gameState = 'idle';
+		mines = 10;
+		flags = 0;
+		timer?.reset();
+		clicks = [];
+		board = Array.from({ length: columns }).map((_, i) =>
+			Array.from({ length: columns }).map((_, j) => ({ open: false, flag: false, value: 0, i, j }))
+		);
+
+		let placedMines = 0;
+		while (placedMines < mines) {
+			const cell = board[randomInt(rows - 1)][randomInt(columns - 1)];
+			if (cell.value !== 'mine') {
+				cell.value = 'mine';
+				placedMines += 1;
+			}
+		}
+
+		for (let i = 0; i < rows; i++) {
+			for (let j = 0; j < columns; j++) {
+				if (board[i][j].value === 'mine') {
+					for (const [x, y] of deltas) {
+						const cell = board[i + x]?.[j + y];
+						if (cell && cell.value !== 'mine') {
+							cell.value += 1;
+						}
+					}
+				}
+			}
+		}
 	}
 
 	function revealAllMines() {
@@ -98,8 +141,7 @@
 		cell.open = true;
 		openCells += 1;
 		if (cell.value === 'mine') {
-			gameOver = true;
-			won = false;
+			gameState = 'lost';
 			timer.stop();
 			revealAllMines();
 			return false;
@@ -110,19 +152,20 @@
 
 	function checkGameOver() {
 		if (flags + openCells === totalNumberOfCells) {
-			gameOver = true;
-			won = true;
+			gameState = 'won';
 			timer.stop();
 		}
 	}
 
 	function handleCellPress(i: number, j: number) {
-		if (!started) {
+		clicks.push({ row: i, column: j, time: timer.timer! });
+		if (gameState === 'idle') {
 			timer.start();
+			gameState = 'playing';
 		}
 		const cell = board[i][j];
 
-		if (gameOver || cell.flag) {
+		if (gameState === 'won' || gameState === 'lost' || cell.flag) {
 			return;
 		}
 
@@ -143,8 +186,9 @@
 	}
 
 	function handlePlaceFlag(i: number, j: number) {
+		clicks.push({ row: i, column: j, time: timer.timer! });
 		const cell = board[i][j];
-		if (gameOver || cell.open) {
+		if (gameState !== 'playing' || cell.open) {
 			return;
 		}
 
@@ -184,36 +228,6 @@
 				return handlePlaceFlag(i, j);
 		}
 	}
-
-	let placedMines = 0;
-	while (placedMines < mines) {
-		const cell = board[randomInt(rows - 1)][randomInt(columns - 1)];
-		if (cell.value !== 'mine') {
-			cell.value = 'mine';
-			placedMines += 1;
-		}
-	}
-
-	for (let i = 0; i < rows; i++) {
-		for (let j = 0; j < columns; j++) {
-			if (board[i][j].value === 'mine') {
-				for (const [x, y] of deltas) {
-					const cell = board[i + x]?.[j + y];
-					if (cell && cell.value !== 'mine') {
-						cell.value += 1;
-					}
-				}
-			}
-		}
-	}
-	/**
-	 * TODO:
-	 * SELECT board size and mine count
-	 * SELECT difficulty (tab)
-	 * START/RESTART game
-	 * Register click history
-	 *
-	 * */
 </script>
 
 <svelte:head>
@@ -224,19 +238,17 @@
 <section>
 	<h1>Minesweeper</h1>
 
-	<section>
-		<ul>
-			<li><strong>Remaining Flags</strong> {mines - flags}</li>
-			<li>{mines - flags}</li>
-			<li><strong>Won</strong> {won} {gameOver}</li>
-			<li>
-				<strong>Time:</strong>
-				<Timer bind:this={timer} />
-			</li>
-		</ul>
-	</section>
-
-	<div class="board" style="--board-columns: {columns}" class:game-over={gameOver}>
+	<div class="board-header">
+		<span>{mines - flags} </span>
+		<span>{gameState} </span>
+		<Timer bind:this={timer} />
+	</div>
+	<div class="v-s-separator" />
+	<div
+		class="board"
+		style="--board-columns: {columns}"
+		class:game-over={gameState === 'won' || gameState === 'lost'}
+	>
 		{#each board as row, i}
 			{#each row as cell, j}
 				{@const { open, flag, value } = cell}
@@ -262,7 +274,7 @@
 							{/if}
 						{:else if flag}
 							<img src={FlagIcon} alt="A flag" />
-							<!--- remove this if not in debug, could use an env --->
+							<!-- - remove this if not in debug, could use an env - -->
 							<!-- {:else} -->
 							<!-- 	{value} -->
 						{/if}
@@ -271,25 +283,43 @@
 			{/each}
 		{/each}
 	</div>
+	<div class="v-m-separator" />
+	<div class="board-footer">
+		<button on:click={resetGame}>Restart</button>
+	</div>
 </section>
 
 <style>
 	.board {
 		display: grid;
 		grid-template-columns: repeat(var(--board-columns), 1fr);
-		background-color: #2196f3;
+	}
+
+	.v-m-separator {
+		height: 36px;
+	}
+
+	.v-s-separator {
+		height: 12px;
+	}
+
+	.board-header {
+		display: flex;
+		justify-content: space-around;
+		width: 60%;
+	}
+
+	.board-footer {
+		display: flex;
+		justify-content: space-around;
+		width: 70%;
 	}
 
 	.cell {
-		background-color: rgba(255, 255, 255, 0.8);
-		border: 1px solid rgba(0, 0, 0, 0.8);
+		background-color: #c6c6c6;
+		box-shadow: 0px 0px 1px 2px rgba(0, 0, 0, 0.8);
 		font-size: 30px;
 		text-align: center;
-	}
-
-	.board.game-over {
-		box-shadow: 2px 2px 20px 2px rgba(0, 0, 0, 0.5);
-		/* border: 2px solid antiquewhite; */
 	}
 
 	.board.game-over > .cell.flag {
@@ -301,20 +331,24 @@
 	}
 
 	.cell.open {
-		background-color: purple;
+		background-color: #e3d5c3;
+		/* background-color: purple; */
 	}
 
 	.cell.open.mine {
 		background-color: orange;
 	}
 
-	.cell:hover {
-		background-color: red;
+	.cell:hover,
+	.cell:focus {
+		filter: brightness(110%);
 	}
 
-	/* .cell:not(.open):hover { */
-	/* 	background-color: red; */
-	/* } */
+	.cell:not(.open):hover,
+	.cell:not(.open):focus {
+		transform: translateY(-1px);
+		/* translateX(2px); */
+	}
 
 	.cell:active {
 		background: green;
@@ -322,8 +356,8 @@
 
 	.cell-internal {
 		display: flex;
-		width: 80px;
-		height: 80px;
+		width: 64px;
+		height: 64px;
 		flex-direction: row;
 		justify-content: center;
 		align-content: center;

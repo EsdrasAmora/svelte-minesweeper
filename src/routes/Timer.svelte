@@ -16,6 +16,7 @@
 
 	export function reset() {
 		timer = 0;
+		clearInterval(interval);
 	}
 
 	export function stop() {
