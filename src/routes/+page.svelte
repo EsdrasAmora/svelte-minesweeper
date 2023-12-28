@@ -179,7 +179,7 @@
 	function handlePlaceFlag(i: number, j: number) {
 		clicks.push({ row: i, column: j, time: timer.time! });
 		const cell = board[i][j];
-		if (gameOver || cell.open) {
+		if (gameState !== 'playing' || cell.open) {
 			return;
 		}
 
