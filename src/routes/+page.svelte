@@ -15,12 +15,6 @@
 		[1, -1],
 		[-1, 1]
 	] as const;
-	//TODO: add difficult selector
-	const difficult = {
-		easy: { rows: 8, columns: 8, mines: 10 },
-		medium: { rows: 15, columns: 8, mines: 10 },
-		hard: { rows: 15, columns: 15, mines: 10 }
-	};
 	function randomInt(max: number) {
 		return Math.round(Math.random() * max);
 	}
@@ -31,20 +25,20 @@
 	import FlagIcon from '$lib/images/flag.svg?url';
 	import Timer from './Timer.svelte';
 
-	let columns = 8;
-	let rows = 8;
-	let openCells = 0;
-	let gameState: GameState = 'idle';
-	let mines = 10;
-	let flags = 0;
-	let timer: Timer;
+	let columns = $state(8);
+	let rows = $state(8);
+	let openCells = $state(0);
+	let gameState = $state<GameState>('idle');
+	let mines = $state(10);
+	let flags = $state(0);
 	//TODO:  Generate clip from click history
-	let clicks: Click[] = [];
-	let board: Cell[][] = [];
+	let clicks = $state<Click[]>([]);
+	let board = $state<Cell[][]>([]);
+	const gameOver = $derived(gameState === 'won' || gameState === 'lost');
+	const timer = new Timer();
+	const totalNumberOfCells = $derived(rows * columns);
 
 	resetGame();
-	$: totalNumberOfCells = rows * columns;
-	// $: console.log({ flags, openCells, totalNumberOfCells });
 
 	function resetGame() {
 		columns = 8;
@@ -53,7 +47,7 @@
 		gameState = 'idle';
 		mines = 10;
 		flags = 0;
-		timer?.reset();
+		timer.reset();
 		clicks = [];
 		board = Array.from({ length: columns }).map((_, i) =>
 			Array.from({ length: columns }).map((_, j) => ({ open: false, flag: false, value: 0, i, j }))
@@ -158,7 +152,7 @@
 	}
 
 	function handleCellPress(i: number, j: number) {
-		clicks.push({ row: i, column: j, time: timer.timer! });
+		clicks.push({ row: i, column: j, time: timer.time });
 		if (gameState === 'idle') {
 			timer.start();
 			gameState = 'playing';
@@ -171,24 +165,21 @@
 
 		if (cell.open) {
 			revealNeighborsIfFlagged(cell);
-			board = board;
+			checkGameOver();
 			return;
 		}
 
 		if (!tryOpenCell(cell)) {
-			board = board;
 			return;
 		}
-
-		board = board;
 
 		checkGameOver();
 	}
 
 	function handlePlaceFlag(i: number, j: number) {
-		clicks.push({ row: i, column: j, time: timer.timer! });
+		clicks.push({ row: i, column: j, time: timer.time! });
 		const cell = board[i][j];
-		if (gameState !== 'playing' || cell.open) {
+		if (gameOver || cell.open) {
 			return;
 		}
 
@@ -199,8 +190,6 @@
 			flags += 1;
 			cell.flag = true;
 		}
-
-		board = board;
 	}
 
 	function focusCell(i: number, j: number) {
@@ -241,14 +230,10 @@
 	<div class="board-header">
 		<span>{mines - flags} </span>
 		<span>{gameState} </span>
-		<Timer bind:this={timer} />
+		<span>{timer.time}</span>
 	</div>
 	<div class="v-s-separator" />
-	<div
-		class="board"
-		style="--board-columns: {columns}"
-		class:game-over={gameState === 'won' || gameState === 'lost'}
-	>
+	<div class="board" style="--board-columns: {columns}" class:game-over={gameOver}>
 		{#each board as row, i}
 			{#each row as cell, j}
 				{@const { open, flag, value } = cell}
@@ -261,9 +246,12 @@
 					class:open
 					class:flag
 					class:mine
-					on:click={() => handleCellPress(i, j)}
-					on:contextmenu|preventDefault={() => handlePlaceFlag(i, j)}
-					on:keydown={(e) => handleCellKeydown(e, i, j)}
+					onclick={() => handleCellPress(i, j)}
+					oncontextmenu={(e) => {
+						e.preventDefault();
+						handlePlaceFlag(i, j);
+					}}
+					onkeydown={(e) => handleCellKeydown(e, i, j)}
 				>
 					<div class="cell-internal">
 						{#if open}
@@ -275,8 +263,8 @@
 						{:else if flag}
 							<img src={FlagIcon} alt="A flag" />
 							<!-- - remove this if not in debug, could use an env - -->
-							<!-- {:else} -->
-							<!-- 	{value} -->
+						{:else}
+							{value}
 						{/if}
 					</div>
 				</div>
@@ -285,7 +273,7 @@
 	</div>
 	<div class="v-m-separator" />
 	<div class="board-footer">
-		<button on:click={resetGame}>Restart</button>
+		<button onclick={resetGame}>Restart</button>
 	</div>
 </section>
 
